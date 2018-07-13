@@ -1,39 +1,106 @@
 package Gulp::Analyser;
 
-# Created on: 2018-07-13 09:01:10
+# Created on: 2018-07-13 20:01:46
 # Create by:  Ivan Wills
 # $Id$
 # $Revision$, $HeadURL$, $Date$
 # $Revision$, $Source$, $Date$
 
-use strict;
+use Moo;
 use warnings;
-use version;
-use Carp;
-use Scalar::Util;
-use List::Util;
-#use List::MoreUtils;
-use Data::Dumper qw/Dumper/;
+use List::MoreUtils qw/uniq/;
 use English qw/ -no_match_vars /;
+use FindBin qw/$Bin/;
+use File::stat;
+use JSON::XS qw/encode_json/;
 
+our $VERSION = 0.001;
 
-our $VERSION     = version->new('0.0.1');
-our @EXPORT_OK   = qw//;
-our %EXPORT_TAGS = ();
-#our @EXPORT      = qw//;
+has gulp => (
+    is => 'ro',
+);
 
-sub new {
-    my $caller = shift;
-    my $class  = ref $caller ? ref $caller : $caller;
-    my %param  = @_;
-    my $self   = \%param;
+sub generate_report {
+    my ($self, $task, @pre_tasks) = @_;
 
-    bless $self, $class;
+    for my $pre_task (@pre_tasks) {
+        $self->run_gulp($pre_task);
+    }
 
-    return $self;
+    my $report = {};
+    my $states = $self->file_states('.');
+    $report->{tasks} = $self->run_gulp($task);
+    my $final = $self->file_states('.');
+    $report->{files} = $self->files_changed($states, $final);
+
+    for my $sub_task (@{ $report->{tasks} }) {
+        $sub_task->{report} = generate_report($sub_task->{task}, @pre_tasks);
+        push @pre_tasks, $sub_task->{task};
+    }
+
+    return $report;
 }
 
+sub files_changed {
+    my ($self, $orig, $result) = @_;
+    my %changed;
 
+    my @files = uniq sort keys %$orig, keys %$result;
+
+    for my $file (@files) {
+        next if $orig->{$file}
+            && $result->{$file}
+            && $orig->{$file}{size} == $result->{$file}{size}
+            && $orig->{$file}{mtime} == $result->{$file}{mtime};
+
+        $changed{$file} = $orig->{$file} && !$result->{$file} ? 'removed'
+            : !$orig->{$file} && $result->{$file}             ? 'added'
+            :                                                   'changed';
+    }
+
+    return \%changed;
+}
+
+sub run_gulp {
+    my ($self, $task) = @_;
+    my @report;
+
+    my @log = `$self->gulp $task`;
+    for my $log_line (@log) {
+        my ($sub_task, $time, $unit) = $log_line =~ /Finished \s+ '([^']+)' \s+ after \s+ (\d+) \s+ (\w+)/xms;
+        next if !$sub_task;
+        push @report, {
+            task => $sub_task,
+            time => $time,
+            unit => $unit,
+        };
+    }
+
+    return \@report;
+}
+
+sub file_states {
+    my ($self, $dir, $states) = @_;
+    $states ||= {};
+
+    my @files = glob("$dir/*");
+    for my $file (@files) {
+        if ( -d $file ) {
+            $self->file_states($file, $states);
+        }
+        else {
+            my $stats = stat($file);
+            $states->{$file} = {
+                size  => $stats->size,
+                atime => $stats->atime,
+                mtime => $stats->mtime,
+                ctime => $stats->ctime,
+            };
+        }
+    }
+
+    return $states;
+}
 
 1;
 
@@ -45,7 +112,7 @@ Gulp::Analyser - <One-line description of module's purpose>
 
 =head1 VERSION
 
-This documentation refers to Gulp::Analyser version 0.0.1
+This documentation refers to Gulp::Analyser version 0.001
 
 
 =head1 SYNOPSIS
@@ -86,6 +153,7 @@ Param: C<$search> - type (detail) - description
 Return: Gulp::Analyser -
 
 Description:
+
 
 =head1 DIAGNOSTICS
 

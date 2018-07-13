@@ -8,16 +8,12 @@
 
 use strict;
 use warnings;
-use List::MoreUtils qw/uniq/;
 use Getopt::Long;
 use Pod::Usage;
-use Data::Dumper qw/Dumper/;
 use English qw/ -no_match_vars /;
 use FindBin qw/$Bin/;
-use File::stat;
-use JSON::XS qw/encode_json/;
 
-our $VERSION = version->new('0.0.1');
+our $VERSION = 0.001;
 my ($name)   = $PROGRAM_NAME =~ m{^.*/(.*?)$}mxs;
 
 my %option = (
@@ -58,108 +54,27 @@ sub main {
     }
 
     # do stuff here
-    my $report = generate_report(shift @ARGV);
+    my $analyser = Gulp::Analyser->new(%option);
+    my $report = $analyser->generate_report(shift @ARGV);
 
     print encode_json($report);
 
     return;
 }
 
-sub generate_report {
-    my ($task, @pre_tasks) = @_;
-
-    for my $pre_task (@pre_tasks) {
-        run_gulp($pre_task);
-    }
-
-    my $report = {};
-    my $states = file_states('.');
-    $report->{tasks} = run_gulp($task);
-    my $final = file_states('.');
-    $report->{files} = files_changed($states, $final);
-
-    for my $sub_task (@{ $report->{tasks} }) {
-        $sub_task->{report} = generate_report($sub_task->{task}, @pre_tasks);
-        push @pre_tasks, $sub_task->{task};
-    }
-
-    return $report;
-}
-
-sub files_changed {
-    my ($orig, $result) = @_;
-    my %changed;
-
-    my @files = uniq sort keys %$orig, keys %$result;
-
-    for my $file (@files) {
-        next if $orig->{$file}
-            && $result->{$file}
-            && $orig->{$file}{size} == $result->{$file}{size}
-            && $orig->{$file}{mtime} == $result->{$file}{mtime};
-
-        $changed{$file} = $orig->{$file} && !$result->{$file} ? 'removed'
-                : !$orig->{$file} && $result->{$file}   ? 'added'
-                :                                         'changed';
-    }
-
-    return \%changed;
-}
-
-sub run_gulp {
-    my ($task) = @_;
-    my @report;
-
-    my @log = `$option{gulp} $task`;
-    for my $log_line (@log) {
-        my ($sub_task, $time, $unit) = $log_line =~ /Finished \s+ '([^']+)' \s+ after \s+ (\d+) \s+ (\w+)/xms;
-        next if !$sub_task;
-        push @report, {
-            task => $sub_task,
-            time => $time,
-            unit => $unit,
-        };
-    }
-
-    return \@report;
-}
-
-sub file_states {
-    my ($dir, $states) = @_;
-    $states ||= {};
-
-    my @files = glob("$dir/*");
-    for my $file (@files) {
-        if ( -d $file ) {
-            file_states($file, $states);
-        }
-        else {
-            my $stats = stat($file);
-            $states->{$file} = {
-                size  => $stats->size,
-                atime => $stats->atime,
-                mtime => $stats->mtime,
-                ctime => $stats->ctime,
-            };
-        }
-    }
-
-    return $states;
-}
-
 __DATA__
 
 =head1 NAME
 
-bin/gulp-analyser - <One-line description of commands purpose>
+gulp-analyser - <One-line description of commands purpose>
 
 =head1 VERSION
 
-This documentation refers to bin/gulp-analyser version 0.0.1
+This documentation refers to gulp-analyser version 0.001
 
 =head1 SYNOPSIS
 
-   bin/gulp-analyser [option]
+   gulp-analyser [option]
 
  OPTIONS:
   -o --other         other option
@@ -167,7 +82,7 @@ This documentation refers to bin/gulp-analyser version 0.0.1
   -v --verbose       Show more detailed option
      --version       Prints the version information
      --help          Prints this help information
-     --man           Prints the full documentation for bin/gulp-analyser
+     --man           Prints the full documentation for gulp-analyser
 
 =head1 DESCRIPTION
 
