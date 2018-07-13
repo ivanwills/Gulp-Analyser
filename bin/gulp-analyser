@@ -12,12 +12,15 @@ use Getopt::Long;
 use Pod::Usage;
 use English qw/ -no_match_vars /;
 use FindBin qw/$Bin/;
+use JSON::XS qw/encode_json/;
+use Gulp::Analyser;
 
 our $VERSION = 0.001;
 my ($name)   = $PROGRAM_NAME =~ m{^.*/(.*?)$}mxs;
 
 my %option = (
     gulp    => 'gulp',
+    depth   => 10,
     verbose => 0,
     man     => 0,
     help    => 0,
