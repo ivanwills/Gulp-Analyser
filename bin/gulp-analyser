@@ -96,6 +96,7 @@ sub run_gulp {
     my @log = `$option{gulp} $task`;
     for my $log_line (@log) {
         my ($sub_task, $time, $unit) = $log_line =~ /Finished \s+ '([^']+)' \s+ after \s+ (\d+) \s+ (\w+)/xms;
+        next if !$sub_task;
         push @report, {
             task => $sub_task,
             time => $time,
