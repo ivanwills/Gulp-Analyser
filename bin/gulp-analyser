@@ -58,15 +58,32 @@ sub main {
     }
 
     # do stuff here
-    my $states = file_states('.');
-    my $task = shift @ARGV;
-    my $report = run_gulp($task);
-    my $final = file_states('.');
-    $report->{files} = files_changed($states, $final);
+    my $report = generate_report(shift @ARGV);
 
     print encode_json($report);
 
     return;
+}
+
+sub generate_report {
+    my ($task, @pre_tasks) = @_;
+
+    for my $pre_task (@pre_tasks) {
+        run_gulp($pre_task);
+    }
+
+    my $report = {};
+    my $states = file_states('.');
+    $report->{tasks} = run_gulp($task);
+    my $final = file_states('.');
+    $report->{files} = files_changed($states, $final);
+
+    for my $sub_task (@{ $report->{tasks} }) {
+        $sub_task->{report} = generate_report($sub_task->{task}, @pre_tasks);
+        push @pre_tasks, $sub_task->{task};
+    }
+
+    return $report;
 }
 
 sub files_changed {
