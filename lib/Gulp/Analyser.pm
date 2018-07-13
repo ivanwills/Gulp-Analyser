@@ -40,7 +40,7 @@ sub generate_report {
     $report->{files} = $self->files_changed($states, $final);
 
     for my $sub_task (@{ $report->{tasks} }) {
-        $sub_task->{report} = generate_report($sub_task->{task}, $depth + 1, @pre_tasks);
+        $sub_task->{report} = $self->generate_report($sub_task->{task}, $depth + 1, @pre_tasks);
         push @pre_tasks, $sub_task->{task};
     }
 
