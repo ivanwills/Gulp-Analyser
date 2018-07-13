@@ -12,16 +12,22 @@ use List::MoreUtils qw/uniq/;
 use English qw/ -no_match_vars /;
 use FindBin qw/$Bin/;
 use File::stat;
-use JSON::XS qw/encode_json/;
 
 our $VERSION = 0.001;
 
 has gulp => (
     is => 'ro',
 );
+has depth => (
+    is      => 'rw',
+    default => 10,
+);
 
 sub generate_report {
-    my ($self, $task, @pre_tasks) = @_;
+    my ($self, $task, $depth, @pre_tasks) = @_;
+    $depth ||= 0;
+
+    return if $depth >= $self->depth;
 
     for my $pre_task (@pre_tasks) {
         $self->run_gulp($pre_task);
@@ -65,7 +71,7 @@ sub run_gulp {
     my ($self, $task) = @_;
     my @report;
 
-    my @log = `$self->gulp $task`;
+    my @log = `$self->{gulp} $task`;
     for my $log_line (@log) {
         my ($sub_task, $time, $unit) = $log_line =~ /Finished \s+ '([^']+)' \s+ after \s+ (\d+) \s+ (\w+)/xms;
         next if !$sub_task;
