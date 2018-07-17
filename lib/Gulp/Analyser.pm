@@ -48,14 +48,15 @@ sub generate_report {
         }
     }
 
-    my $report = {};
+    my $report = { tasks => [] };
     my $states = $self->file_states('.');
-    $report->{tasks} = $self->run_gulp($task);
+    my $tasks = $self->run_gulp($task);
     my $final = $self->file_states('.');
     $report->{files} = $self->files_changed($states, $final);
 
-    for my $sub_task (@{ $report->{tasks} }) {
+    for my $sub_task (@{ $tasks }) {
         next if $sub_task eq $task;
+        push @{ $report->{tasks} }, $sub_task;
         $sub_task->{report} = $self->generate_report($sub_task->{task}, $depth + 1, @pre_tasks);
         push @pre_tasks, $sub_task->{task};
     }
@@ -99,10 +100,10 @@ sub run_gulp {
     }
     else {
         for my $log_line (@log) {
-            last if $log_line =~ /^Error /;
+            last if $log_line =~ /^Error /xms;
 
-            my ($sub_task, $time, $unit) = $log_line =~ /Finished \s+ '([^']+)' \s+ after \s+ (\d+) \s+ (\w+)/xms;
-            next if !$sub_task || $sub_task eq $task;
+            my ($sub_task, $time, $unit) = $log_line =~ /Finished \s+ '([^']+)' \s+ after \s+ (\d+(?:[.]\d+)?) \s+ (\w+)/xms;
+            next if !$sub_task;
 
             push @report, {
                 task => $sub_task,
