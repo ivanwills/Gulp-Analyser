@@ -102,18 +102,31 @@ sub run_gulp {
         for my $log_line (@log) {
             last if $log_line =~ /^Error /xms;
 
-            my ($sub_task, $time, $unit) = $log_line =~ /Finished \s+ '([^']+)' \s+ after \s+ (\d+(?:[.]\d+)?) \s+ (\w+)/xms;
+            my ($sub_task, $magnitude, $unit) = $log_line =~ /Finished \s+ '([^']+)' \s+ after \s+ (\d+(?:[.]\d+)?) \s+ (\w+)/xms;
             next if !$sub_task;
 
             push @report, {
                 task => $sub_task,
-                time => $time,
+                time => $self->get_milliseconds($magnitude, $unit),
+                magnitude => $magnitude,
                 unit => $unit,
             };
         }
     }
 
     return \@report;
+}
+
+sub get_milliseconds {
+    my ($self, $magnitude, $unit) = @_;
+
+    my $time = $unit eq 'ms' ? $magnitude
+        : $unit eq 's'       ? $magnitude * 1000
+        : $unit eq 'min'     ? $magnitude * 1000 * 60
+        : $unit eq 'hr'      ? $magnitude * 1000 * 60 * 60
+        :                      die "Error unknown unit for '$magnitude $unit'!\n";
+
+    return $time;
 }
 
 sub file_states {
