@@ -14,6 +14,7 @@ use FindBin qw/$Bin/;
 use File::stat;
 
 our $VERSION = 0.001;
+our $last_build = '';
 
 has gulp => (
     is => 'ro',
@@ -22,15 +23,29 @@ has depth => (
     is      => 'rw',
     default => 10,
 );
+has tasks => (
+    is      => 'rw',
+    default => sub {{}},
+);
 
 sub generate_report {
     my ($self, $task, $depth, @pre_tasks) = @_;
     $depth ||= 0;
 
     return if $depth >= $self->depth;
+    return if $self->{tasks}{$task}++;
 
-    for my $pre_task (@pre_tasks) {
-        $self->run_gulp($pre_task);
+    if ( @pre_tasks && $last_build ne $pre_tasks[-1] ) {
+        for my $pre_task (@pre_tasks) {
+            # we shouldn't need to care about these out puts
+            warn +(' ' x $depth), "gulp $pre_task\n";
+            my $log = `$self->{gulp} $pre_task 2>&1`;
+            if ( $log =~ /^Error / ) {
+                warn $log;
+                warn "Errored running task $pre_task\n";
+                return {};
+            }
+        }
     }
 
     my $report = {};
@@ -40,6 +55,7 @@ sub generate_report {
     $report->{files} = $self->files_changed($states, $final);
 
     for my $sub_task (@{ $report->{tasks} }) {
+        next if $sub_task eq $task;
         $sub_task->{report} = $self->generate_report($sub_task->{task}, $depth + 1, @pre_tasks);
         push @pre_tasks, $sub_task->{task};
     }
@@ -71,15 +87,29 @@ sub run_gulp {
     my ($self, $task) = @_;
     my @report;
 
-    my @log = `$self->{gulp} $task`;
-    for my $log_line (@log) {
-        my ($sub_task, $time, $unit) = $log_line =~ /Finished \s+ '([^']+)' \s+ after \s+ (\d+) \s+ (\w+)/xms;
-        next if !$sub_task;
+    warn "gulp $task\n\n";
+    my @log = `$self->{gulp} $task 2>&1`;
+    $last_build = $task;
+
+    if ($CHILD_ERROR) {
         push @report, {
-            task => $sub_task,
-            time => $time,
-            unit => $unit,
+            task  => $task,
+            error => $CHILD_ERROR,
         };
+    }
+    else {
+        for my $log_line (@log) {
+            last if $log_line =~ /^Error /;
+
+            my ($sub_task, $time, $unit) = $log_line =~ /Finished \s+ '([^']+)' \s+ after \s+ (\d+) \s+ (\w+)/xms;
+            next if !$sub_task || $sub_task eq $task;
+
+            push @report, {
+                task => $sub_task,
+                time => $time,
+                unit => $unit,
+            };
+        }
     }
 
     return \@report;
