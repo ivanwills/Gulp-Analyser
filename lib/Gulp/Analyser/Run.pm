@@ -8,21 +8,98 @@ package Gulp::Analyser::Run;
 
 use Moo;
 use warnings;
-use version;
 use Carp;
 use Scalar::Util;
 use List::Util;
 #use List::MoreUtils;
 use Data::Dumper qw/Dumper/;
 use English qw/ -no_match_vars /;
+use File::stat;
+use AnyEvent;
+use AnyEvent::Handle;
+use AnyEvent::Inotify::Simple;
 
-extends 'Some::Thing';
+our $VERSION = 0.001;
 
-our $VERSION = version->new('0.0.1');
+sub run {
+    my ($self, $cmd) = @_;
+    my @report;
+    my $start = 0;
+    my $cv = AnyEvent->condvar;
 
+    my $inotify = AnyEvent::Inotify::Simple->new(
+        directory      => '.',
+        event_receiver => sub {
+            my ($event, $file, $moved_to) = @_;
+            $moved_to ||= '';
+            return if ! $start || $file =~ /^[.]git|node_modules/;
+            warn "$event -> $file : $moved_to\n" if $event !~ /^(?:open|close)$/;
+            warn "$event -> $file\n" if $file eq '.';
+            #given($event) {
+            #    when('create') {
+            #       say "Someone just uploaded $file!"
+            #    }
+            #};
+        },
+    );
 
+    open my $fh, '-|', $cmd or die "Could not run '$cmd': $!\n";
 
+    my $hdl = AnyEvent::Handle->new(
+        fh => $fh,
+        on_error => sub {
+            my ($hdl, $fatal, $msg) = @_;
+            AE::log error => $msg;
+            $hdl->destroy;
+            $cv->send;
+        },
+        on_error => sub {
+            my ($hdl, $fatal, $msg) = @_;
+            $hdl->destroy;
+            $cv->send;
+        },
+        on_read => sub {
+            $start = 1;
+            shift->push_read(
+                line => sub {
+                    my ($hdl, $line) = @_;
 
+                    if ( $line =~ /^Error /xms ) {
+                        $hdl->stop_read();
+                        return;
+                    }
+
+                    my ($sub_task, $magnitude, $unit) = $line =~ /Finished \s+ '([^']+)' \s+ after \s+ (\d+(?:[.]\d+)?) \s+ (\w+)/xms;
+                    return if !$sub_task;
+
+                    push @report, {
+                        task => $sub_task,
+                        time => $self->get_milliseconds($magnitude, $unit),
+                        magnitude => $magnitude,
+                        unit => $unit,
+                    };
+                }
+            );
+        },
+    );
+
+    $cv->recv;
+
+    warn Dumper \@report, "$inotify";
+    return \@report;
+}
+
+sub get_milliseconds {
+    my ($self, $magnitude, $unit) = @_;
+
+    my $time = $unit eq 'ms' ? $magnitude
+        : $unit eq 's'       ? $magnitude * 1000
+        : $unit eq 'min'     ? $magnitude * 1000 * 60
+        : $unit eq 'hr'      ? $magnitude * 1000 * 60 * 60
+        :                      die "Error unknown unit for '$magnitude $unit'!\n";
+
+    return $time;
+}
 
 1;
 
