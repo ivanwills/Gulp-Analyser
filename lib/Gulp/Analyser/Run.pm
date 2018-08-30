@@ -23,7 +23,7 @@ our $VERSION = 0.001;
 
 sub run {
     my ($self, $cmd) = @_;
-    my @report;
+    my (@tasks, %report);
     my $start = 0;
     my $cv = AnyEvent->condvar;
 
@@ -33,13 +33,8 @@ sub run {
             my ($event, $file, $moved_to) = @_;
             $moved_to ||= '';
             return if ! $start || $file =~ /^[.]git|node_modules/;
-            warn "$event -> $file : $moved_to\n" if $event !~ /^(?:open|close)$/;
-            warn "$event -> $file\n" if $file eq '.';
-            #given($event) {
-            #    when('create') {
-            #       say "Someone just uploaded $file!"
-            #    }
-            #};
+            $report{files}{$file} ||= [];
+            push @{ $report{files}{$file} }, $event if ! @{ $report{files}{$file} } || $report{files}{$file}[-1] ne $event;
         },
     );
 
@@ -72,7 +67,7 @@ sub run {
                     my ($sub_task, $magnitude, $unit) = $line =~ /Finished \s+ '([^']+)' \s+ after \s+ (\d+(?:[.]\d+)?) \s+ (\w+)/xms;
                     return if !$sub_task;
 
-                    push @report, {
+                    push @tasks, {
                         task => $sub_task,
                         time => $self->get_milliseconds($magnitude, $unit),
                         magnitude => $magnitude,
@@ -85,8 +80,12 @@ sub run {
 
     $cv->recv;
 
-    warn Dumper \@report, "$inotify";
-    return \@report;
+    $report{tasks} = \@tasks;
+    local $Data::Dumper::Sortkeys = 1;
+    local $Data::Dumper::Indent = 1;
+    warn Dumper \%report;
+    $inotify = undef;
+    return \%report;
 }
 
 sub get_milliseconds {
