@@ -12,12 +12,14 @@ use List::MoreUtils qw/uniq/;
 use English qw/ -no_match_vars /;
 use FindBin qw/$Bin/;
 use File::stat;
+use Gulp::Analyser::Run;
+use Data::Dumper;
 
 our $VERSION = 0.001;
 our $last_build = '';
 
-has gulp => (
-    is => 'ro',
+has runner => (
+    is => 'rw',
 );
 has depth => (
     is      => 'rw',
@@ -28,6 +30,12 @@ has tasks => (
     default => sub {{}},
 );
 
+sub BUILD {
+    my ($self, $args) = @_;
+
+    $self->runner(Gulp::Analyser::Run->new(gulp => $args->{gulp} || 'gulp'));
+}
+
 sub generate_report {
     my ($self, $task, $depth, @pre_tasks) = @_;
     $depth ||= 0;
@@ -35,11 +43,12 @@ sub generate_report {
     return if $depth >= $self->depth;
     return if $self->{tasks}{$task}++;
 
+    warn "$task\n";
     if ( @pre_tasks && $last_build ne $pre_tasks[-1] ) {
         for my $pre_task (@pre_tasks) {
             # we shouldn't need to care about these out puts
             warn +(' ' x $depth), "gulp $pre_task\n";
-            my $log = `$self->{gulp} $pre_task 2>&1`;
+            my $log = $self->runner->pre_run($task);
             if ( $log =~ /^Error / ) {
                 warn $log;
                 warn "Errored running task $pre_task\n";
@@ -48,13 +57,11 @@ sub generate_report {
         }
     }
 
-    my $report = { tasks => [] };
-    my $states = $self->file_states('.');
-    my $tasks = $self->run_gulp($task);
-    my $final = $self->file_states('.');
-    $report->{files} = $self->files_changed($states, $final);
+    my $report = $self->runner()->run($task);
+    my @tasks = @{ $report->{tasks} };
+    $report->{tasks} = [];
 
-    for my $sub_task (@{ $tasks }) {
+    for my $sub_task (@tasks) {
         next if $sub_task eq $task;
         push @{ $report->{tasks} }, $sub_task;
         $sub_task->{report} = $self->generate_report($sub_task->{task}, $depth + 1, @pre_tasks);
@@ -62,94 +69,6 @@ sub generate_report {
     }
 
     return $report;
-}
-
-sub files_changed {
-    my ($self, $orig, $result) = @_;
-    my %changed;
-
-    my @files = uniq sort keys %$orig, keys %$result;
-
-    for my $file (@files) {
-        next if $orig->{$file}
-            && $result->{$file}
-            && $orig->{$file}{size} == $result->{$file}{size}
-            && $orig->{$file}{mtime} == $result->{$file}{mtime};
-
-        $changed{$file} = $orig->{$file} && !$result->{$file} ? 'removed'
-            : !$orig->{$file} && $result->{$file}             ? 'added'
-            :                                                   'changed';
-    }
-
-    return \%changed;
-}
-
-sub run_gulp {
-    my ($self, $task) = @_;
-    my @report;
-
-    warn "gulp $task\n\n";
-    my @log = `$self->{gulp} $task 2>&1`;
-    $last_build = $task;
-
-    if ($CHILD_ERROR) {
-        push @report, {
-            task  => $task,
-            error => $CHILD_ERROR,
-        };
-    }
-    else {
-        for my $log_line (@log) {
-            last if $log_line =~ /^Error /xms;
-
-            my ($sub_task, $magnitude, $unit) = $log_line =~ /Finished \s+ '([^']+)' \s+ after \s+ (\d+(?:[.]\d+)?) \s+ (\w+)/xms;
-            next if !$sub_task;
-
-            push @report, {
-                task => $sub_task,
-                time => $self->get_milliseconds($magnitude, $unit),
-                magnitude => $magnitude,
-                unit => $unit,
-            };
-        }
-    }
-
-    return \@report;
-}
-
-sub get_milliseconds {
-    my ($self, $magnitude, $unit) = @_;
-
-    my $time = $unit eq 'ms' ? $magnitude
-        : $unit eq 's'       ? $magnitude * 1000
-        : $unit eq 'min'     ? $magnitude * 1000 * 60
-        : $unit eq 'hr'      ? $magnitude * 1000 * 60 * 60
-        :                      die "Error unknown unit for '$magnitude $unit'!\n";
-
-    return $time;
-}
-
-sub file_states {
-    my ($self, $dir, $states) = @_;
-    $states ||= {};
-
-    my @files = glob("$dir/*");
-    for my $file (@files) {
-        if ( -d $file ) {
-            $self->file_states($file, $states);
-        }
-        else {
-            my $stats = stat($file);
-            $states->{$file} = {
-                size  => $stats->size,
-                atime => $stats->atime,
-                mtime => $stats->mtime,
-                ctime => $stats->ctime,
-            };
-        }
-    }
-
-    return $states;
 }
 
 1;
