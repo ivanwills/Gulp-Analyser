@@ -25,6 +25,13 @@ has gulp => (
     is => 'rw',
 );
 
+sub pre_run {
+    my ($self, $task) = @_;
+    my $cmd = $self->gulp . " $task";
+
+    return `$cmd`;
+}
+
 sub run {
     my ($self, $task) = @_;
     my (@tasks, %report);
@@ -36,7 +43,7 @@ sub run {
         event_receiver => sub {
             my ($event, $file, $moved_to) = @_;
             $moved_to ||= '';
-            return if ! $start || $file =~ /^[.]git|node_modules/;
+            return if ! $start || -d $file || $file =~ /^[.]git|node_modules/;
             $report{files}{$file} ||= [];
             push @{ $report{files}{$file} }, $event if ! @{ $report{files}{$file} } || $report{files}{$file}[-1] ne $event;
         },
@@ -47,12 +54,6 @@ sub run {
 
     my $hdl = AnyEvent::Handle->new(
         fh => $fh,
-        on_error => sub {
-            my ($hdl, $fatal, $msg) = @_;
-            AE::log error => $msg;
-            $hdl->destroy;
-            $cv->send;
-        },
         on_error => sub {
             my ($hdl, $fatal, $msg) = @_;
             $hdl->destroy;
