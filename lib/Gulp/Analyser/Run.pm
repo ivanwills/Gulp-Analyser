@@ -21,8 +21,12 @@ use AnyEvent::Inotify::Simple;
 
 our $VERSION = 0.001;
 
+has gulp => (
+    is => 'rw',
+);
+
 sub run {
-    my ($self, $cmd) = @_;
+    my ($self, $task) = @_;
     my (@tasks, %report);
     my $start = 0;
     my $cv = AnyEvent->condvar;
@@ -38,6 +42,7 @@ sub run {
         },
     );
 
+    my $cmd = $self->gulp . " $task";
     open my $fh, '-|', $cmd or die "Could not run '$cmd': $!\n";
 
     my $hdl = AnyEvent::Handle->new(
@@ -80,11 +85,8 @@ sub run {
 
     $cv->recv;
 
-    $report{tasks} = \@tasks;
-    local $Data::Dumper::Sortkeys = 1;
-    local $Data::Dumper::Indent = 1;
-    warn Dumper \%report;
     $inotify = undef;
+    $report{tasks} = \@tasks;
     return \%report;
 }
 
