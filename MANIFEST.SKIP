@@ -61,3 +61,6 @@ Debian_CPANTS.txt
 
 # Avoid archives of this distribution
 \bGulp-Analyser-[\d\.\_]+
+^MYMETA\.json$
+MYMETA.json.lock
+.vtide.yml
