@@ -80,7 +80,7 @@ This documentation refers to gulp-analyser version 0.001
    gulp-analyser [option]
 
  OPTIONS:
-  -o --other         other option
+  -g --gulp[=]str   Specify the gulp command to run (Defaults to "gulp")
 
   -v --verbose       Show more detailed option
      --version       Prints the version information
