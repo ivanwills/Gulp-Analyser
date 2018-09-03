@@ -8,6 +8,7 @@ package Gulp::Analyser;
 
 use Moo;
 use warnings;
+use Carp qw/carp croak cluck confess longmess/;
 use List::MoreUtils qw/uniq/;
 use English qw/ -no_match_vars /;
 use FindBin qw/$Bin/;
@@ -39,6 +40,7 @@ sub BUILD {
 sub generate_report {
     my ($self, $task, $depth, @pre_tasks) = @_;
     $depth ||= 0;
+    confess "No tasked passed to generate_report!" if !$task;
 
     return if $depth >= $self->depth;
     return if $self->{tasks}{$task}++;
@@ -61,11 +63,22 @@ sub generate_report {
     my @tasks = @{ $report->{tasks} };
     $report->{tasks} = [];
 
-    for my $sub_task (@tasks) {
+    while ( my $sub_task  = shift @tasks) {
         next if $sub_task eq $task;
         push @{ $report->{tasks} }, $sub_task;
         $sub_task->{report} = $self->generate_report($sub_task->{task}, $depth + 1, @pre_tasks);
         push @pre_tasks, $sub_task->{task};
+
+        if ( $sub_task->{report} && @{ $sub_task->{report}{tasks} } > 1 ) {
+            # this task is a super task, so remove the child tasks form $task's list
+            for my $child_task (@{ $sub_task->{report}{tasks} }[1 .. $#{ $sub_task->{report}{tasks} }]) {
+                my @new_tasks;
+                for my $parent (@tasks) {
+                    push @new_tasks, $parent if $parent->{task} ne $child_task->{task};
+                }
+                @tasks = @new_tasks;
+            }
+        }
     }
 
     return $report;
