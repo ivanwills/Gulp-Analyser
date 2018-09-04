@@ -34,12 +34,19 @@ sub pre_run {
 
 sub run {
     my ($self, $task) = @_;
-    my (@tasks, %report);
+    my (@tasks, %tasks, %report);
     my $start = 0;
     my $cv = AnyEvent->condvar;
 
+    push @tasks, { task => $task };
+    $tasks{$task} = $#tasks;
+
     my $inotify = AnyEvent::Inotify::Simple->new(
-        directory      => '.',
+        directory => '.',
+        filter    => sub {
+            my $file = shift;
+            return $file =~ m{/(?:[.]git|node_modules)/};
+        },
         event_receiver => sub {
             my ($event, $file, $moved_to) = @_;
             $moved_to ||= '';
@@ -59,6 +66,11 @@ sub run {
             $hdl->destroy;
             $cv->send;
         },
+        on_eof => sub {
+            my ($hdl, $fatal, $msg) = @_;
+            $hdl->destroy;
+            $cv->send;
+        },
         on_read => sub {
             $start = 1;
             shift->push_read(
@@ -70,10 +82,21 @@ sub run {
                         return;
                     }
 
+                    my ($start_task) = $line =~ /Starting '([^']+)'[.][.][.]/;
+                    if ($start_task) {
+                        warn Dumper(\%tasks), ' --- ';
+                        if ( ! defined $tasks{$start_task} ) {
+                            push @tasks, { task => $start_task };
+                            $tasks{$start_task} = $#tasks;
+                            warn "Initing $start_task ($#tasks)\n";
+                        }
+                        return;
+                    }
+
                     my ($sub_task, $magnitude, $unit) = $line =~ /Finished \s+ '([^']+)' \s+ after \s+ (\d+(?:[.]\d+)?) \s+ (\w+)/xms;
                     return if !$sub_task;
 
-                    push @tasks, {
+                    $tasks[$tasks{$sub_task}] = {
                         task => $sub_task,
                         time => $self->get_milliseconds($magnitude, $unit),
                         magnitude => $magnitude,
@@ -86,7 +109,10 @@ sub run {
 
     $cv->recv;
 
+    $inotify->DEMOLISH();
+    $inotify->inotify->DESTROY;
     $inotify = undef;
+    warn "Saw " . keys %{$report{files}}, "\n";
     $report{tasks} = \@tasks;
     return \%report;
 }
