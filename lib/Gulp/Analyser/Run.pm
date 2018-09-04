@@ -18,6 +18,7 @@ use File::stat;
 use AnyEvent;
 use AnyEvent::Handle;
 use AnyEvent::Inotify::Simple;
+use Time::HiRes qw/time/;
 
 our $VERSION = 0.001;
 
@@ -38,9 +39,6 @@ sub run {
     my $start = 0;
     my $cv = AnyEvent->condvar;
 
-    push @tasks, { task => $task };
-    $tasks{$task} = $#tasks;
-
     my $inotify = AnyEvent::Inotify::Simple->new(
         directory => '.',
         filter    => sub {
@@ -56,8 +54,11 @@ sub run {
         },
     );
 
-    my $cmd = $self->gulp . " $task";
+    `echo "$task" >> gar.log`;
+    my $cmd = $self->gulp . " $task | tee -a gar.log";
     open my $fh, '-|', $cmd or die "Could not run '$cmd': $!\n";
+    my $timer;
+    my $killing;
 
     my $hdl = AnyEvent::Handle->new(
         fh => $fh,
@@ -72,7 +73,6 @@ sub run {
             $cv->send;
         },
         on_read => sub {
-            $start = 1;
             shift->push_read(
                 line => sub {
                     my ($hdl, $line) = @_;
@@ -84,11 +84,9 @@ sub run {
 
                     my ($start_task) = $line =~ /Starting '([^']+)'[.][.][.]/;
                     if ($start_task) {
-                        warn Dumper(\%tasks), ' --- ';
                         if ( ! defined $tasks{$start_task} ) {
                             push @tasks, { task => $start_task };
                             $tasks{$start_task} = $#tasks;
-                            warn "Initing $start_task ($#tasks)\n";
                         }
                         return;
                     }
@@ -106,13 +104,38 @@ sub run {
             );
         },
     );
+    $start = 1;
+
+    my $time = time;
+    my $count = 0;
+    $timer = AnyEvent->timer(
+        interval => 1,
+        after    => 1,
+        cb => sub {
+            my $finished = 1;
+            for my $task (@tasks) {
+                $finished &&= defined $task->{time};
+            }
+            if ( $finished && $count++ ) {
+                close $fh;
+                $hdl->destroy;
+                $cv->send;
+            }
+            else {
+                $count = 0;
+                print {\*STDERR} '.';
+            }
+        },
+    );
 
     $cv->recv;
 
     $inotify->DEMOLISH();
     $inotify->inotify->DESTROY;
-    $inotify = undef;
-    warn "Saw " . keys %{$report{files}}, "\n";
+    undef $inotify;
+    $killing = 1;
+    undef $timer;
+    warn "Saw for $task " . keys %{$report{files}}, " files\n";
     $report{tasks} = \@tasks;
     return \%report;
 }
