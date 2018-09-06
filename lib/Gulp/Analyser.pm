@@ -30,12 +30,14 @@ has tasks => (
     is      => 'rw',
     default => sub {{}},
 );
-
-sub BUILD {
-    my ($self, $args) = @_;
-
-    $self->runner(Gulp::Analyser::Run->new(gulp => $args->{gulp} || 'gulp'));
-}
+has gulp => (
+    is      => 'rw',
+    default => 'gulp',
+);
+has filter => (
+    is      => 'rw',
+    default => sub {[qr/(?:[.]git|node_modules)/]},
+);
 
 sub generate_report {
     my ($self, $task, $depth, @pre_tasks) = @_;
@@ -45,21 +47,29 @@ sub generate_report {
     return if $depth >= $self->depth;
     return if $self->{tasks}{$task}++;
 
-    warn "$task\n";
+    my $runner = Gulp::Analyser::Run->new(%$self);
+
     if ( @pre_tasks && $last_build ne $pre_tasks[-1] ) {
         for my $pre_task (@pre_tasks) {
             # we shouldn't need to care about these out puts
-            warn +(' ' x $depth), "gulp $pre_task\n";
-            my $log = $self->runner->pre_run($task);
+            my $log = $runner->pre_run($task);
             if ( $log =~ /^Error / ) {
-                warn $log;
                 warn "Errored running task $pre_task\n";
                 return {};
             }
         }
     }
 
-    my $report = $self->runner()->run($task);
+    warn +('  ' x $depth) . "$task\n";
+    my $keys = Dumper({ %$self });
+    $keys =~ s/^.VAR1\s+=\s+//;
+    $keys =~ s/;\n?\Z//;
+    $keys =~ s/'/'\\''/g;
+    my $report = `perl -MData::Dumper -MGulp::Analyser::Run -e 'print Dumper(Gulp::Analyser::Run->new($keys)->run("$task"))'`;
+    #my $report = $runner->run($task);
+    undef $runner;
+    $report =~ s/^.VAR1\s+=\s+//;
+    $report = eval $report; ## no critic
     my @tasks = @{ $report->{tasks} };
     $report->{tasks} = [];
 
