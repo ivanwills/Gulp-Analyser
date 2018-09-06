@@ -9,9 +9,6 @@ package Gulp::Analyser::Run;
 use Moo;
 use warnings;
 use Carp;
-use Scalar::Util;
-use List::Util;
-#use List::MoreUtils;
 use Data::Dumper qw/Dumper/;
 use English qw/ -no_match_vars /;
 use File::stat;
@@ -23,7 +20,12 @@ use Time::HiRes qw/time/;
 our $VERSION = 0.001;
 
 has gulp => (
-    is => 'rw',
+    is      => 'rw',
+    default => 'gulp',
+);
+has filter => (
+    is      => 'rw',
+    default => sub {[qr/(?:[.]git|node_modules)/]},
 );
 
 sub pre_run {
@@ -123,7 +125,6 @@ sub run {
             }
             else {
                 $count = 0;
-                print {\*STDERR} '.';
             }
         },
     );
@@ -135,7 +136,7 @@ sub run {
     undef $inotify;
     $killing = 1;
     undef $timer;
-    warn "Saw for $task " . keys %{$report{files}}, " files\n";
+    undef $cv;
     $report{tasks} = \@tasks;
     return \%report;
 }
