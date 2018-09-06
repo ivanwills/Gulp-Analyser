@@ -39,6 +39,7 @@ sub main {
     GetOptions(
         \%option,
         'gulp|g=s',
+        'ignore|i=s@',
         'verbose|v+',
         'man',
         'help',
@@ -81,11 +82,13 @@ This documentation refers to gulp-analyser version 0.001
 
  OPTIONS:
   -g --gulp[=]str   Specify the gulp command to run (Defaults to "gulp")
+  -i --ignore[=]regex
+                    Add patterns to list of files that we don't care about (default .git and node_modules)
 
-  -v --verbose       Show more detailed option
-     --version       Prints the version information
-     --help          Prints this help information
-     --man           Prints the full documentation for gulp-analyser
+  -v --verbose      Show more detailed option
+     --version      Prints the version information
+     --help         Prints this help information
+     --man          Prints the full documentation for gulp-analyser
 
 =head1 DESCRIPTION
 
