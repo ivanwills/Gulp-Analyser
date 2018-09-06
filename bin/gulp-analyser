@@ -13,6 +13,7 @@ use Pod::Usage;
 use English qw/ -no_match_vars /;
 use FindBin qw/$Bin/;
 use JSON::XS qw/encode_json/;
+use CHI::Memoize qw(:all);
 use Gulp::Analyser;
 
 our $VERSION = 0.001;
@@ -58,6 +59,13 @@ sub main {
     }
 
     # do stuff here
+    memoize('Gulp::Analyser::generate_report',
+        driver     => 'File',
+        root_dir   => ".gulp-analyser",
+        expires_in => '1m',
+        key        => sub { shift @_; join ' ', @_ },
+    );
+
     my $analyser = Gulp::Analyser->new(%option);
     my $report = $analyser->generate_report(shift @ARGV);
 
