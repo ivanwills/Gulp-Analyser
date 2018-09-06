@@ -12,7 +12,8 @@ use Getopt::Long;
 use Pod::Usage;
 use English qw/ -no_match_vars /;
 use FindBin qw/$Bin/;
-use JSON::XS qw/encode_json/;
+use Path::Tiny;
+use JSON::XS qw/encode_json decode_json/;
 use CHI::Memoize qw(:all);
 use Gulp::Analyser;
 
@@ -41,6 +42,9 @@ sub main {
         \%option,
         'gulp|g=s',
         'ignore|i=s@',
+        'describe|d=s@',
+        'output|o=s',
+        'report|r=s',
         'verbose|v+',
         'man',
         'help',
@@ -62,16 +66,48 @@ sub main {
     memoize('Gulp::Analyser::generate_report',
         driver     => 'File',
         root_dir   => ".gulp-analyser",
-        expires_in => '1m',
+        expires_in => '4w',
         key        => sub { shift @_; join ' ', @_ },
     );
 
+    my $task = shift @ARGV || pod2usage( -verbose => 1 );
     my $analyser = Gulp::Analyser->new(%option);
-    my $report = $analyser->generate_report(shift @ARGV);
+    my $report = $option{report}
+        ? read_report($option{report})
+        : $analyser->generate_report($task);
 
-    print encode_json($report);
+    if ( $option{describe} ) {
+        print output({$analyser->describe($task, $report, @{ $option{describe} })});
+    }
+    else {
+        print output($report);
+    }
 
     return;
+}
+
+sub read_report {
+    my ($file) = @_;
+
+    if ( $file =~ /[.]ya?ml$/ ) {
+        require YAML::XS;
+        return YAML::XS::LoadFile($file);
+    }
+
+    return decode_json(scalar path($file)->slurp);
+}
+
+sub output {
+    my ($data) = @_;
+
+    if ( $option{output} ) {
+        if ( $option{output} eq 'json' ) {
+            return encode_json($data);
+        }
+    }
+
+    require YAML::XS;
+    return YAML::XS::Dump($data);
 }
 
 __DATA__
