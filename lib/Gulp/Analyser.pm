@@ -94,6 +94,48 @@ sub generate_report {
     return $report;
 }
 
+sub describe {
+    my ($self, $task, $report, @files) = @_;
+    my %answer;
+    my %answers;
+
+    if ( $report->{level} ) {
+        my @search = @files;
+        for my $file (keys %{ $report->{files} || {} }) {
+            for my $i (0 .. $#search) {
+                next if $search[$i] && $file ne $search[$i];
+
+                my $read   = (grep {$_ eq 'access'} @{ $report->{files}{$file} }) ? 1 : 0;
+                my $create = (grep {$_ eq 'modify'} @{ $report->{files}{$file} }) ? 1 : 0;
+
+                if ( $read && $create ) {
+                    $answer{$file} = {
+                        read   => $read  ,
+                        create => $create,
+                    };
+                }
+                else {
+                    $answer{$file} = $read ? 'read' : $create ? 'create' : 'other';
+                }
+                @search = map {$_ != $i ? $search[$_] : ()} 0 .. $#search;
+            }
+        }
+        %answers = ( $task => \%answer );
+    }
+
+    for my $task (@{ $report->{tasks} }) {
+        next if ! $task->{report};
+
+        $task->{report}{level} = ($report->{level} || 0) + 1;
+        my %answer = $self->describe($task->{task}, $task->{report}, @files);
+        if (%{ $answer{$task->{task}} }) {
+            %answers = ( %answers, %answer );
+        }
+    }
+
+    return %answers;
+}
+
 1;
 
 __END__
