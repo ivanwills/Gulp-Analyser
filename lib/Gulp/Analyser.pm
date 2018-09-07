@@ -159,7 +159,27 @@ This documentation refers to Gulp::Analyser version 0.001
 
 =head1 DESCRIPTION
 
+=head1 Properties
+
+=over 4
+
+=item runner
+
+=item depth
+
+=item tasks
+
+=item gulp
+
+=item filter
+
+=back
+
 =head1 SUBROUTINES/METHODS
+
+=head2 C<generate_report ( $task, $depth, @pre_tasks)>
+
+=head2 C<describe ( $task, $report, @files)>
 
 =head1 DIAGNOSTICS
 
