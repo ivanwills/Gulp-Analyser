@@ -159,7 +159,7 @@ __END__
 
 =head1 NAME
 
-Gulp::Analyser::Run - <One-line description of module's purpose>
+Gulp::Analyser::Run - Runs gulp commands and records the file they effect
 
 =head1 VERSION
 
