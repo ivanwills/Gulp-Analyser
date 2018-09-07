@@ -59,4 +59,5 @@ subtest 'Changes' => sub {
 };
 
 module_boilerplate_ok('lib/Gulp/Analyser.pm');
+module_boilerplate_ok('lib/Gulp/Analyser/Run.pm');
 done_testing();
