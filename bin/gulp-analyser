@@ -125,14 +125,24 @@ This documentation refers to gulp-analyser version 0.001
    gulp-analyser [option]
 
  OPTIONS:
-  -g --gulp[=]str   Specify the gulp command to run (Defaults to "gulp")
+  -g --gulp[=]str
+                Specify the gulp command to run (Defaults to "gulp")
   -i --ignore[=]regex
-                    Add patterns to list of files that we don't care about (default .git and node_modules)
+                Add patterns to list of files that we don't care about
+                (default .git and node_modules)
+  -d --describe[=]file
+                Describe where this file is used (specify multiple times for
+                more than one file)
+  -o --output[=](json|yaml)
+                Output the results as either json or yaml (the default)
+  -r --report[=]file
+                Use this file as the analysis report (either json or yaml
+                suffix required to match file type)
 
-  -v --verbose      Show more detailed option
-     --version      Prints the version information
-     --help         Prints this help information
-     --man          Prints the full documentation for gulp-analyser
+  -v --verbose  Show more detailed option
+     --version  Prints the version information
+     --help     Prints this help information
+     --man      Prints the full documentation for gulp-analyser
 
 =head1 DESCRIPTION
 
