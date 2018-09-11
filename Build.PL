@@ -21,6 +21,9 @@ my $builder = Module::Build->new(
         'Time::HiRes'               => '1.9741',
         'YAML::XS'                  => '0.69',
     },
+    configure_requires => {
+        'Module::Build' => 0.38,
+    },
     build_requires => {
         'Test::More'     => 0,
         'Test::Warnings' => 0,
