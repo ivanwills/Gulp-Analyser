@@ -122,7 +122,10 @@ This documentation refers to gulp-analyser version 0.001
 
 =head1 SYNOPSIS
 
-   gulp-analyser [option]
+    # analyse task
+    gulp-analyser [(-o|--output) (json|yaml)] [(-g|--gulp) command] [(-i|--ignore) regex] task
+    # describe where a file is used in sub tasks of task
+    gulp-analyser [(-o|--output) (json|yaml)] [(-g|--gulp) command] [(-i|--ignore) regex] ((-d|--describe) file) task
 
  OPTIONS:
   -g --gulp[=]str
