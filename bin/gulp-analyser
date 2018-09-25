@@ -70,13 +70,14 @@ sub main {
         key        => sub { shift @_; join ' ', @_ },
     );
 
-    my $task = shift @ARGV || pod2usage( -verbose => 1 );
+    my $task = shift @ARGV;
     my $analyser = Gulp::Analyser->new(%option);
     my $report = $option{report}
         ? read_report($option{report})
         : $analyser->generate_report($task);
 
     if ( $option{describe} ) {
+        $task ||= $report->{tasks}[0]{task};
         print output({$analyser->describe($task, $report, @{ $option{describe} })});
     }
     else {
@@ -123,11 +124,12 @@ This documentation refers to gulp-analyser version 0.001
 =head1 SYNOPSIS
 
     # analyse task
-    gulp-analyser [(-o|--output) (json|yaml)] [(-g|--gulp) command] [(-i|--ignore) regex] task
+    gulp-analyser [(-o|--output) (json|yaml)] [(-g|--gulp) command] [(-i|--ignore) regex] [task]
     # describe where a file is used in sub tasks of task
-    gulp-analyser [(-o|--output) (json|yaml)] [(-g|--gulp) command] [(-i|--ignore) regex] ((-d|--describe) file) task
+    gulp-analyser [(-o|--output) (json|yaml)] [(-g|--gulp) command] [(-i|--ignore) regex] ((-d|--describe) file) [task]
 
  OPTIONS:
+  task          The gulp task to run (can be left blank to run the default gulp task or for reporting)
   -g --gulp[=]str
                 Specify the gulp command to run (Defaults to "gulp")
   -i --ignore[=]regex

@@ -42,17 +42,16 @@ has filter => (
 sub generate_report {
     my ($self, $task, $depth, @pre_tasks) = @_;
     $depth ||= 0;
-    confess "No tasked passed to generate_report!" if !$task;
 
     return if $depth >= $self->depth;
-    return if $self->{tasks}{$task}++;
+    return if $self->{tasks}{$task // '"default"'}++;
 
     my $runner = Gulp::Analyser::Run->new(%$self);
 
     if ( @pre_tasks && $last_build ne $pre_tasks[-1] ) {
         for my $pre_task (@pre_tasks) {
             # we shouldn't need to care about these out puts
-            my $log = $runner->pre_run($task);
+            my $log = $runner->pre_run($pre_task);
             if ( $log =~ /^Error / ) {
                 warn "Errored running task $pre_task\n";
                 return {};
@@ -60,11 +59,12 @@ sub generate_report {
         }
     }
 
-    warn +('  ' x $depth) . "$task\n";
+    warn +('  ' x $depth) . ($task // '"default"') . "\n";
     my $keys = Dumper({ %$self });
     $keys =~ s/^.VAR1\s+=\s+//;
     $keys =~ s/;\n?\Z//;
     $keys =~ s/'/'\\''/g;
+    $task //= '';
     my $report = `perl -MData::Dumper -MGulp::Analyser::Run -e 'print Dumper(Gulp::Analyser::Run->new($keys)->run("$task"))'`;
     #my $report = $runner->run($task);
     undef $runner;
@@ -94,7 +94,7 @@ sub generate_report {
     return $report;
 }
 
-sub describe {
+sub describe_files {
     my ($self, $task, $report, @files) = @_;
     my %answer;
     my %answers;
@@ -127,7 +127,7 @@ sub describe {
         next if ! $task->{report};
 
         $task->{report}{level} = ($report->{level} || 0) + 1;
-        my %answer = $self->describe($task->{task}, $task->{report}, @files);
+        my %answer = $self->describe_files($task->{task}, $task->{report}, @files);
         if (%{ $answer{$task->{task}} }) {
             %answers = ( %answers, %answer );
         }
