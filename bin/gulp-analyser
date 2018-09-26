@@ -78,7 +78,7 @@ sub main {
 
     if ( $option{describe} ) {
         $task ||= $report->{tasks}[0]{task};
-        print output({$analyser->describe($task, $report, @{ $option{describe} })});
+        print output({$analyser->describe_files($task, $report, @{ $option{describe} })});
     }
     else {
         print output($report);
