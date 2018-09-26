@@ -65,11 +65,7 @@ sub generate_report {
     $keys =~ s/;\n?\Z//;
     $keys =~ s/'/'\\''/g;
     $task //= '';
-    my $report = `perl -MData::Dumper -MGulp::Analyser::Run -e 'print Dumper(Gulp::Analyser::Run->new($keys)->run("$task"))'`;
-    #my $report = $runner->run($task);
-    undef $runner;
-    $report =~ s/^.VAR1\s+=\s+//;
-    $report = eval $report; ## no critic
+    my $report = $runner->run($task);
     my @tasks = @{ $report->{tasks} };
     $report->{tasks} = [];
 
