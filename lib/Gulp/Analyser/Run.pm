@@ -27,6 +27,18 @@ has filter => (
     is      => 'rw',
     default => sub {[qr/(?:[.]git|node_modules)/]},
 );
+has inotify => (
+    is    => 'rw',
+    build => '_inotify',
+);
+has report => (
+    is      => 'rw',
+    default => sub {{}},
+);
+has start => (
+    is      => 'rw',
+    default => 0,
+);
 
 sub pre_run {
     my ($self, $task) = @_;
@@ -38,29 +50,14 @@ sub pre_run {
 sub run {
     my ($self, $task) = @_;
     my (@tasks, %tasks, %report);
-    my $start = 0;
     my $cv = AnyEvent->condvar;
 
-    my $inotify = AnyEvent::Inotify::Simple->new(
-        directory => '.',
-        filter    => sub {
-            my $file = shift;
-            return $file =~ m{/(?:[.]git|node_modules)/};
-        },
-        event_receiver => sub {
-            my ($event, $file, $moved_to) = @_;
-            $moved_to ||= '';
-            return if ! $start || -d $file || $file =~ /^[.]git|node_modules/;
-            $report{files}{$file} ||= [];
-            push @{ $report{files}{$file} }, $event if ! @{ $report{files}{$file} } || $report{files}{$file}[-1] ne $event;
-        },
-    );
-
+    $self->report(\%report);
+    $self->inotify($self->_inotify) if ! $self->inotify;
     `echo "$task" >> gar.log`;
     my $cmd = $self->gulp . " $task | tee -a gar.log";
     open my $fh, '-|', $cmd or die "Could not run '$cmd': $!\n";
-    my $timer;
-    my $killing;
+    $self->start(1);
 
     my $hdl = AnyEvent::Handle->new(
         fh => $fh,
@@ -106,11 +103,10 @@ sub run {
             );
         },
     );
-    $start = 1;
 
     my $time = time;
     my $count = 0;
-    $timer = AnyEvent->timer(
+    my $timer = AnyEvent->timer(
         interval => 1,
         after    => 1,
         cb => sub {
@@ -131,10 +127,7 @@ sub run {
 
     $cv->recv;
 
-    $inotify->DEMOLISH();
-    $inotify->inotify->DESTROY;
-    undef $inotify;
-    $killing = 1;
+    $self->start(0);
     undef $timer;
     undef $cv;
     $report{tasks} = \@tasks;
@@ -151,6 +144,29 @@ sub get_milliseconds {
         :                      die "Error unknown unit for '$magnitude $unit'!\n";
 
     return $time;
+}
+
+sub _inotify {
+    my ($self) = @_;
+    my $filter = $self->filter;
+
+    return AnyEvent::Inotify::Simple->new(
+        directory => '.',
+        filter    => sub {
+            my $file = shift;
+            return $file =~ m{$filter};
+        },
+        event_receiver => sub {
+            my ($event, $file, $moved_to) = @_;
+            return if ! $self->start || -d $file || $file =~ /^[.]git|node_modules/;
+            my $report = $self->report;
+            $report->{files}{$file} ||= [];
+
+            if ( ! @{ $report->{files}{$file} } || $report->{files}{$file}[-1] ne $event ) {
+                push @{ $report->{files}{$file} }, $event;
+            }
+        },
+    );
 }
 
 1;
